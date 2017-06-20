@@ -1,8 +1,6 @@
 # HTTP::CookieJar::RedisStore
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/http/cookie_jar/redis_store`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Redis store for [http cookie_jar](https://github.com/sparklemotion/http-cookie)
 
 ## Installation
 
@@ -22,7 +20,11 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```ruby
+app_id = "HTTPCookieJar:Example:"
+jar_redis = HTTP::CookieJar.new(store: :redis, redis_conn: Redis.new, app_id: app_id)
+jar_redis.cookies
+```
 
 ## Development
 
@@ -32,4 +34,4 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/http-cookie_jar-redis_store.
+Bug reports and pull requests are welcome on GitHub at https://github.com/vkill/http-cookie_jar-redis_store.

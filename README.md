@@ -22,8 +22,8 @@ Or install it yourself as:
 
 ```ruby
 app_id = "HTTPCookieJar:Example:"
-jar_redis = HTTP::CookieJar.new(store: :redis, redis_conn: Redis.new, app_id: app_id)
-jar_redis.cookies
+jar = HTTP::CookieJar.new(store: :redis, redis_conn: Redis.new, app_id: app_id)
+jar.cookies
 ```
 
 ## Development

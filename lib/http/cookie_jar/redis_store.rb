@@ -1,10 +1,13 @@
+require "http/cookie_jar/redis_store_version"
+
 require "http/cookie"
 require "http/cookie_jar/hash_store"
-require "http/cookie_jar/redis_store/version"
 
 module HTTP
   class CookieJar
     class RedisStore < AbstractStore
+      VERSION = ::HTTP::CookieJar::RedisStoreVERSION
+
       def default_options
         {
           :gc_threshold => HTTP::Cookie::MAX_COOKIES_TOTAL / 20,

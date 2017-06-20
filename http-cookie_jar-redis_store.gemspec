@@ -1,11 +1,11 @@
 # coding: utf-8
 lib = File.expand_path("../lib", __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "http/cookie_jar/redis_store/version"
+require "http/cookie_jar/redis_store_version"
 
 Gem::Specification.new do |spec|
   spec.name          = "http-cookie_jar-redis_store"
-  spec.version       = HTTP::CookieJar::RedisStore::VERSION
+  spec.version       = HTTP::CookieJar::RedisStoreVERSION
   spec.authors       = ["vkill"]
   spec.email         = ["vkill.net@gmail.com"]
 
@@ -35,4 +35,6 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "bundler", "~> 1.15"
   spec.add_development_dependency "rake", "~> 10.0"
   spec.add_development_dependency "rspec", "~> 3.0"
+
+  spec.add_development_dependency "redis"
 end

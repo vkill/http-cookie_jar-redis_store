@@ -3,6 +3,9 @@ require "http/cookie_jar/redis_store_version"
 require "http/cookie"
 require "http/cookie_jar/hash_store"
 
+require "uri"
+require "json"
+
 module HTTP
   class CookieJar
     class RedisStore < AbstractStore
@@ -24,7 +27,7 @@ module HTTP
           raise "please set app_id"
         end
 
-        @sjar = HTTP::CookieJar::HashStore.new
+        @sjar = ::HTTP::CookieJar::HashStore.new
 
         @gc_index = 0
       end
@@ -33,7 +36,96 @@ module HTTP
         raise TypeError, "can't clone %s" % self.class
       end
 
-      attr_reader :redis_conn
+      def add(cookie)
+        if cookie.session?
+          @sjar.add(cookie)
+          db_delete(cookie)
+        else
+          @sjar.delete(cookie)
+          db_add(cookie)
+        end
+      end
+
+      def delete(cookie)
+        @sjar.delete(cookie)
+        db_delete(cookie)
+      end
+
+      def each(uri = nil, &block) # :yield: cookie
+        now = Time.now
+        if uri
+          cookie_hashes = db_list(uri)
+          cookie_hashes.each do |cookie_h|
+            if secure = cookie_h['secure'] != 0
+              next unless ::URI::HTTPS === uri
+            end
+
+            cookie = ::HTTP::Cookie.new({}.tap { |attrs|
+              attrs[:name]        = cookie_h['name']
+              attrs[:value]       = cookie_h['value']
+              attrs[:domain]      = cookie_h['domain']
+              attrs[:path]        = cookie_h['path']
+              attrs[:expires_at]  = Time.at(cookie_h['expires_at'])
+              attrs[:accessed_at] = Time.at(cookie_h['accessed_at'] || 0)
+              attrs[:created_at]  = Time.at(cookie_h['created_at'] || 0)
+              attrs[:secure]      = secure
+              attrs[:httponly]    = cookie_h['httponly'] != 0
+            })
+
+            if cookie.valid_for_uri?(uri)
+              cookie.accessed_at = now
+              # TODO update redis accessed_at
+              yield cookie
+            end
+          end
+
+          @sjar.each(uri, &block)
+        else
+          cookie_hashes = db_list()
+          cookie_hashes.each do |cookie_h|
+            secure = cookie_h['secure']
+
+            cookie = ::HTTP::Cookie.new({}.tap { |attrs|
+              attrs[:name]        = cookie_h['name']
+              attrs[:value]       = cookie_h['value']
+              attrs[:domain]      = cookie_h['domain']
+              attrs[:path]        = cookie_h['path']
+              attrs[:expires_at]  = Time.at(cookie_h['expires_at'])
+              attrs[:accessed_at] = Time.at(cookie_h['accessed_at'] || 0)
+              attrs[:created_at]  = Time.at(cookie_h['created_at'] || 0)
+              attrs[:secure]      = secure
+              attrs[:httponly]    = cookie_h['httponly'] != 0
+            })
+
+            yield cookie
+          end
+
+          @sjar.each(&block)
+        end
+        self
+      end
+
+      def clear
+        db_clear
+
+        @sjar.clear
+
+        self
+      end
+
+      def cleanup(session = false)
+        synchronize {
+          break if @gc_index == 0
+
+          # TODO
+
+          @gc_index = 0
+        }
+
+        self
+      end
+
+      private
 
       def redis_call(*args)
         if @redis_conn.is_a?(ConnectionPool)
@@ -85,7 +177,7 @@ module HTTP
         cookies ||= []
 
         cookies = cookies.each_slice(2).to_h
-        cookies = cookies.map{|k, v| [k, JSON.parse(v)]}.to_h
+        cookies = cookies.map{|k, v| [k, json_parse(v)]}.to_h
 
         if uri
           thost = DomainName.new(uri.host)
@@ -108,96 +200,10 @@ module HTTP
         redis_call(:del, "#{@app_id}")
       end
 
-      public
-
-      def add(cookie)
-        if cookie.session?
-          @sjar.add(cookie)
-          db_delete(cookie)
-        else
-          @sjar.delete(cookie)
-          db_add(cookie)
-        end
+      def json_parse(json)
+        ::JSON.parse(json)
       end
 
-      def delete(cookie)
-        @sjar.delete(cookie)
-        db_delete(cookie)
-      end
-
-      def each(uri = nil, &block) # :yield: cookie
-        now = Time.now
-        if uri
-          cookie_hashes = db_list(uri)
-          cookie_hashes.each do |cookie_h|
-            if secure = cookie_h['secure'] != 0
-              next unless URI::HTTPS === uri
-            end
-
-            cookie = HTTP::Cookie.new({}.tap { |attrs|
-              attrs[:name]        = cookie_h['name']
-              attrs[:value]       = cookie_h['value']
-              attrs[:domain]      = cookie_h['domain']
-              attrs[:path]        = cookie_h['path']
-              attrs[:expires_at]  = Time.at(cookie_h['expires_at'])
-              attrs[:accessed_at] = Time.at(cookie_h['accessed_at'] || 0)
-              attrs[:created_at]  = Time.at(cookie_h['created_at'] || 0)
-              attrs[:secure]      = secure
-              attrs[:httponly]    = cookie_h['httponly'] != 0
-            })
-
-            if cookie.valid_for_uri?(uri)
-              cookie.accessed_at = now
-              # TODO update redis accessed_at
-              yield cookie
-            end
-          end
-
-          @sjar.each(uri, &block)
-        else
-          cookie_hashes = db_list()
-          cookie_hashes.each do |cookie_h|
-            secure = cookie_h['secure']
-
-            cookie = HTTP::Cookie.new({}.tap { |attrs|
-              attrs[:name]        = cookie_h['name']
-              attrs[:value]       = cookie_h['value']
-              attrs[:domain]      = cookie_h['domain']
-              attrs[:path]        = cookie_h['path']
-              attrs[:expires_at]  = Time.at(cookie_h['expires_at'])
-              attrs[:accessed_at] = Time.at(cookie_h['accessed_at'] || 0)
-              attrs[:created_at]  = Time.at(cookie_h['created_at'] || 0)
-              attrs[:secure]      = secure
-              attrs[:httponly]    = cookie_h['httponly'] != 0
-            })
-
-            yield cookie
-          end
-
-          @sjar.each(&block)
-        end
-        self
-      end
-
-      def clear
-        db_clear
-
-        @sjar.clear
-
-        self
-      end
-
-      def cleanup(session = false)
-        synchronize {
-          break if @gc_index == 0
-
-          # TODO
-
-          @gc_index = 0
-        }
-
-        self
-      end
     end
   end
 end
